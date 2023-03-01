@@ -75,7 +75,7 @@ class ORTCalibrationDataReader(CalibrationDataReader):
         except StopIteration:
             pass
 
-        if featurized_samples is not None and len(featurized_samples) > 0:
+        if featurized_samples is not None and featurized_samples:
             return featurized_samples
         return None
 
@@ -136,7 +136,7 @@ class ORTQuantizer(OptimumQuantizer):
             raise ValueError(ort_quantizer_error_message)
         elif isinstance(model_or_path, Path):
             onnx_files = list(model_or_path.glob("*.onnx"))
-            if len(onnx_files) == 0:
+            if not onnx_files:
                 raise FileNotFoundError(f"Could not find any ONNX model file in {model_or_path}")
             elif len(onnx_files) > 1:
                 raise RuntimeError(

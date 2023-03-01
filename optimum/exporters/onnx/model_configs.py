@@ -204,11 +204,12 @@ class GPT2OnnxConfig(TextDecoderOnnxConfig):
 
     @property
     def values_override(self) -> Optional[Mapping[str, Any]]:
-        pad_value_override = {}
-        if not getattr(self._config, "pad_token_id", None):
-            pad_value_override = {"pad_token_id": 0}
-        super_values_override = super().values_override
-        if super_values_override:
+        pad_value_override = (
+            {}
+            if getattr(self._config, "pad_token_id", None)
+            else {"pad_token_id": 0}
+        )
+        if super_values_override := super().values_override:
             return {**super_values_override, **pad_value_override}
         return pad_value_override
 
@@ -410,13 +411,11 @@ class BartOnnxConfig(TextSeq2SeqOnnxConfig):
         dummy_seq2seq_past_key_values_generator = self.DUMMY_INPUT_GENERATOR_CLASSES[2][task](
             self.task, self._normalized_config, batch_size=dummy_text_input_generator.batch_size, **kwargs
         )
-        dummy_inputs_generators = [
+        return [
             dummy_text_input_generator,
             dummy_decoder_text_input_generator,
             dummy_seq2seq_past_key_values_generator,
         ]
-
-        return dummy_inputs_generators
 
     @property
     def inputs_for_default_and_seq2seq_lm(self):
@@ -426,13 +425,9 @@ class BartOnnxConfig(TextSeq2SeqOnnxConfig):
         }
         if self.use_past_in_inputs:
             common_inputs["decoder_input_ids"] = {0: "batch_size"}
-            # common_inputs["decoder_attention_mask"] = {0: "batch", 1: "past_decoder_sequence + sequence"}
+            self.add_past_key_values(common_inputs, direction="inputs")
         else:
             common_inputs["decoder_input_ids"] = {0: "batch_size", 1: "decoder_sequence_length"}
-            # common_inputs["decoder_attention_mask"] = {0: "batch", 1: "decoder_sequence"}
-
-        if self.use_past_in_inputs:
-            self.add_past_key_values(common_inputs, direction="inputs")
         return common_inputs
 
     @property
@@ -700,10 +695,7 @@ class Data2VecAudioOnnxConfig(ViTOnnxConfig):
 
 class PerceiverDummyInputGenerator(DummyVisionInputGenerator):
     def generate(self, input_name: str, framework: str = "pt"):
-        input_ = super().generate(input_name, framework)
-        # if input_name == "pixel_values":
-        #     input_ = input_[None, :]
-        return input_
+        return super().generate(input_name, framework)
 
 
 class PerceiverOnnxConfig(TextAndVisionOnnxConfig):
@@ -720,13 +712,12 @@ class PerceiverOnnxConfig(TextAndVisionOnnxConfig):
 
     @property
     def inputs_name(self):
-        if self.is_generating_dummy_inputs:
-            if self.task in ["masked-lm", "sequence-classification"]:
-                return "input_ids"
-            else:
-                return "pixel_values"
-        else:
+        if not self.is_generating_dummy_inputs:
             return "inputs"
+        if self.task in ["masked-lm", "sequence-classification"]:
+            return "input_ids"
+        else:
+            return "pixel_values"
 
     @property
     def inputs(self) -> Mapping[str, Mapping[int, str]]:
@@ -798,11 +789,10 @@ class WhisperOnnxConfig(TextAndAudioOnnxConfig):
         }
         if self.use_past_in_inputs:
             common_inputs["decoder_input_ids"] = {0: "batch_size"}
+            self.add_past_key_values(common_inputs, direction="inputs")
+
         else:
             common_inputs["decoder_input_ids"] = {0: "batch_size", 1: "decoder_sequence_length"}
-
-        if self.use_past_in_inputs:
-            self.add_past_key_values(common_inputs, direction="inputs")
 
         return common_inputs
 

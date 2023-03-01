@@ -219,10 +219,7 @@ class OnnxConfig(ExportConfig, ABC):
         Returns:
             `Optional[Mapping[str, Any]]`: A dictionary specifying the configuration items to override.
         """
-        if hasattr(self._config, "use_cache"):
-            return {"use_cache": False}
-
-        return None
+        return {"use_cache": False} if hasattr(self._config, "use_cache") else None
 
     @property
     def is_torch_support_available(self) -> bool:
@@ -269,10 +266,11 @@ class OnnxConfig(ExportConfig, ABC):
             sig = inspect.signature(model.call)
         for param in sig.parameters:
             param_regex = re.compile(rf"{param}(\.\d*)?")
-            to_insert = []
-            for name, dynamic_axes in inputs.items():
-                if re.match(param_regex, name):
-                    to_insert.append((name, dynamic_axes))
+            to_insert = [
+                (name, dynamic_axes)
+                for name, dynamic_axes in inputs.items()
+                if re.match(param_regex, name)
+            ]
             # TODO: figure out a smart way of re-ordering potential nested structures.
             # to_insert = sorted(to_insert, key=lambda t: t[0])
             for name, dynamic_axes in to_insert:
@@ -474,7 +472,7 @@ class OnnxConfigWithPast(OnnxConfig, ABC):
 
     def flatten_output_collection_property(self, name: str, field: Iterable[Any]) -> Dict[str, Any]:
         flattened_output = {}
-        if name in ["present", "past_key_values"]:
+        if name in {"present", "past_key_values"}:
             for idx, t in enumerate(field):
                 self.flatten_past_key_values(flattened_output, name, idx, t)
         else:
@@ -497,11 +495,7 @@ class OnnxSeq2SeqConfigWithPast(OnnxConfigWithPast):
         for name, axes_names in common_outputs.items():
             sequence_name = "encoder_sequence_length" if "encoder" in name else "decoder_sequence_length"
             for axis_idx, name in axes_names.items():
-                if "sequence" in name:
-                    axes_names[axis_idx] = sequence_name
-                # We reset the value as the order in common_outputs (OrderedDict) is lost otherwise
-                else:
-                    axes_names[axis_idx] = name
+                axes_names[axis_idx] = sequence_name if "sequence" in name else name
         if self.use_present_in_outputs:
             self.add_past_key_values(common_outputs, direction="outputs")
 

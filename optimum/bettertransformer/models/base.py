@@ -96,7 +96,7 @@ class BetterTransformerBaseLayer(nn.Module):
             raise ValueError(
                 f"Activation function {self.act_fn} not supported" " for `BetterTransformer` integration."
             )
-        self.use_gelu = (self.act_fn == "gelu") or (self.act_fn == "gelu_new")
+        self.use_gelu = self.act_fn in ["gelu", "gelu_new"]
 
         # Check num_head is even
         if self.num_heads % 2 == 1:

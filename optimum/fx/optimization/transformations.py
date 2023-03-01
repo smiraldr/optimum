@@ -216,7 +216,7 @@ class ReversibleTransformation(Transformation):
                 The transformed module.
 
         """
-        func = self.transform if not reverse else self.reverse
+        func = self.reverse if reverse else self.transform
         graph_module = func(graph_module)
         if lint_and_recompile:
             graph_module.graph.lint()
@@ -517,31 +517,36 @@ class FuseBatchNorm2dInConv2d(Transformation):
 
     def transform(self, graph_module: "GraphModule") -> "GraphModule":
         for node in graph_module.graph.nodes:
-            if node.op == "call_module" and node.args[0].op == "call_module":
-                if (
-                    type(graph_module.get_submodule(node.target)) is torch.nn.BatchNorm2d
-                    and type(graph_module.get_submodule(node.args[0].target)) is torch.nn.Conv2d
-                ):
-                    if len(node.args[0].users) > 1:  # Output of conv is used by other nodes
-                        continue
+            if (
+                node.op == "call_module"
+                and node.args[0].op == "call_module"
+                and (
+                    type(graph_module.get_submodule(node.target))
+                    is torch.nn.BatchNorm2d
+                    and type(graph_module.get_submodule(node.args[0].target))
+                    is torch.nn.Conv2d
+                )
+            ):
+                if len(node.args[0].users) > 1:  # Output of conv is used by other nodes
+                    continue
 
-                    fused_conv = self.fuse(
-                        conv2d=graph_module.get_submodule(node.args[0].target),
-                        bn2d=graph_module.get_submodule(node.target),
-                    )
+                fused_conv = self.fuse(
+                    conv2d=graph_module.get_submodule(node.args[0].target),
+                    bn2d=graph_module.get_submodule(node.target),
+                )
 
-                    # replace the old nn.Conv2d by the fused one
-                    parent_name, _, name = node.args[0].target.rpartition(".")
-                    parent_module = graph_module.get_submodule(parent_name)
-                    setattr(parent_module, name, fused_conv)
+                # replace the old nn.Conv2d by the fused one
+                parent_name, _, name = node.args[0].target.rpartition(".")
+                parent_module = graph_module.get_submodule(parent_name)
+                setattr(parent_module, name, fused_conv)
 
-                    # delete batchnorm from the modules
-                    parent_name, _, name = node.target.rpartition(".")
-                    parent_module = graph_module.get_submodule(parent_name)
-                    delattr(parent_module, name)
+                # delete batchnorm from the modules
+                parent_name, _, name = node.target.rpartition(".")
+                parent_module = graph_module.get_submodule(parent_name)
+                delattr(parent_module, name)
 
-                    node.replace_all_uses_with(node.args[0])
-                    graph_module.graph.erase_node(node)
+                node.replace_all_uses_with(node.args[0])
+                graph_module.graph.erase_node(node)
         return graph_module
 
     def fuse(self, conv2d: torch.nn.Conv2d, bn2d: torch.nn.BatchNorm2d):

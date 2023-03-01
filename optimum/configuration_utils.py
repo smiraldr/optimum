@@ -329,7 +329,9 @@ class BaseConfig(PretrainedConfig):
         config = cls(**config_dict)
 
         if hasattr(config, "pruned_heads"):
-            config.pruned_heads = dict((int(key), value) for key, value in config.pruned_heads.items())
+            config.pruned_heads = {
+                int(key): value for key, value in config.pruned_heads.items()
+            }
 
         # Update config with kwargs if needed
         if "num_labels" in kwargs and "id2label" in kwargs:
@@ -351,10 +353,7 @@ class BaseConfig(PretrainedConfig):
             kwargs.pop(key, None)
 
         logger.info(config)
-        if return_unused_kwargs:
-            return config, kwargs
-        else:
-            return config
+        return (config, kwargs) if return_unused_kwargs else config
 
     # Adapted from transformers.configuration_utils.PretrainedConfig.to_dict
     def to_dict(self) -> Dict[str, Any]:

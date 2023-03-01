@@ -318,7 +318,7 @@ class ORTTrainer(Trainer):
                 "instead.",
                 FutureWarning,
             )
-        if len(kwargs) > 0:
+        if kwargs:
             raise TypeError(f"train() received got unexpected keyword arguments: {', '.join(list(kwargs.keys()))}.")
         # This might change the seed so needs to run first.
         self._hp_search_setup(trial)

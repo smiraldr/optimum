@@ -603,6 +603,10 @@ class ORTDecoderForSeq2Seq(ORTDecoder):
         if past_key_values is not None:
             past_key_values = [past_key_value for pkv_per_layer in past_key_values for past_key_value in pkv_per_layer]
 
+        # Tuple of tuple of length `n_layers`, with each tuple of length equal to the number of self-attention and
+        # cross-attention per decoder layer
+        num_pkv = 4
+        loss = None
         if self._device.type == "cuda" and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_ids, encoder_hidden_states, encoder_attention_mask, past_key_values, labels
@@ -619,14 +623,8 @@ class ORTDecoderForSeq2Seq(ORTDecoder):
             for name in self.key_value_output_names:
                 past_key_values += (output_buffers[name].view(output_shapes[name]),)
 
-            # Tuple of tuple of length `n_layers`, with each tuple of length equal to the number of self-attention and
-            # cross-attention per decoder layer
-            num_pkv = 4
-            past_key_values = tuple(past_key_values[i : i + num_pkv] for i in range(0, len(past_key_values), num_pkv))
-
             logits = output_buffers["logits"].view(output_shapes["logits"])
 
-            loss = None
             if "loss" in self.session_output_names:
                 loss = output_buffers["loss"].view(output_shapes["loss"])
         else:
@@ -661,15 +659,12 @@ class ORTDecoderForSeq2Seq(ORTDecoder):
                 for key in self.key_value_output_names
             )
 
-            # Tuple of tuple of length `n_layers`, with each tuple of length equal to the number of self-attention and
-            # cross-attention per decoder layer
-            num_pkv = 4
-            past_key_values = tuple(past_key_values[i : i + num_pkv] for i in range(0, len(past_key_values), num_pkv))
             logits = torch.from_numpy(outputs[self.session_outputs["logits"]]).to(self._device)
 
-            loss = None
             if "loss" in self.session_output_names:
                 loss = torch.from_numpy(outputs[self.session_outputs["loss"]]).to(self._device)
+
+        past_key_values = tuple(past_key_values[i : i + num_pkv] for i in range(0, len(past_key_values), num_pkv))
 
         # converts output to namedtuple for pipelines post-processing
         return Seq2SeqLMOutput(loss=loss, logits=logits, past_key_values=past_key_values)
@@ -1027,7 +1022,7 @@ class ORTModelForConditionalGeneration(ORTModel, ABC):
             new_model_save_dir = Path(model_cache_path).parent
             preprocessors = maybe_load_preprocessors(model_id, subfolder=subfolder)
 
-            last_decoder_with_past_name = paths.get("last_decoder_with_past_model_name", None)
+            last_decoder_with_past_name = paths.get("last_decoder_with_past_model_name")
             if last_decoder_with_past_name is not None:
                 last_decoder_with_past_name = new_model_save_dir / last_decoder_with_past_name
 
@@ -1097,7 +1092,7 @@ class ORTModelForConditionalGeneration(ORTModel, ABC):
         onnx_config = onnx_config_constructor(model.config, use_past=use_cache)
 
         output_names = [ONNX_ENCODER_NAME, ONNX_DECODER_NAME]
-        if use_cache is True:
+        if use_cache:
             output_names.append(ONNX_DECODER_WITH_PAST_NAME)
         export_models(
             model=model,

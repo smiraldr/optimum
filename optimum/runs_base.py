@@ -26,11 +26,11 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 def get_autoclass_name(task):
-    if task in ["text-classification", "audio-classification"]:
-        autoclass_name = "sequence-classification"
-    else:
-        autoclass_name = task
-    return autoclass_name
+    return (
+        "sequence-classification"
+        if task in ["text-classification", "audio-classification"]
+        else task
+    )
 
 
 class Calibrator:
@@ -61,11 +61,7 @@ class Run:
 
         self.task = run_config["task"]
 
-        if run_config["quantization_approach"] == "static":
-            self.static_quantization = True
-        else:
-            self.static_quantization = False
-
+        self.static_quantization = run_config["quantization_approach"] == "static"
         search_space = {"batch_size": run_config["batch_sizes"], "input_length": run_config["input_lengths"]}
 
         self.study = optuna.create_study(
@@ -222,8 +218,7 @@ class TimeBenchmark:
         self.throughput = round((len(self.latencies) / duration_ns) * SEC_TO_NS_SCALE, 2)
 
     def to_dict(self):
-        # Compute stats, beware latencies are stored as ms
-        benchmarks_stats = {
+        return {
             "nb_forwards": len(self.latencies),
             "throughput": self.throughput,
             "latency_mean": ns_to_ms(np.mean(self.latencies)),
@@ -234,8 +229,6 @@ class TimeBenchmark:
             "latency_99": ns_to_ms(np.quantile(self.latencies, 0.99)),
             "latency_999": ns_to_ms(np.quantile(self.latencies, 0.999)),
         }
-
-        return benchmarks_stats
 
     def execute(self):
         inputs = {}
@@ -262,24 +255,22 @@ class TimeBenchmark:
         for _ in trange(self.warmup_runs, desc="Warming up"):
             self.model.forward(**inputs)
 
-        if self.benchmark_duration != 0:
-            benchmark_duration_ns = self.benchmark_duration * SEC_TO_NS_SCALE
-            print(f"Running time tracking in {self.benchmark_duration:.1f}s.")
-            while sum(self.latencies) < benchmark_duration_ns:
-                # TODO not trak GPU/CPU <--> numpy/torch, need to change the implementation of forward
-                with self.track():
-                    self.model.forward(**inputs)
-
-            self.finalize(benchmark_duration_ns)
-
-            return self.to_dict()
-        else:
-            benchmarks_stats = {
+        if self.benchmark_duration == 0:
+            return {
                 "nb_forwards": 0,
                 "throughput": -1,
                 "latency_mean": -1,
             }
-            return benchmarks_stats
+        benchmark_duration_ns = self.benchmark_duration * SEC_TO_NS_SCALE
+        print(f"Running time tracking in {self.benchmark_duration:.1f}s.")
+        while sum(self.latencies) < benchmark_duration_ns:
+            # TODO not trak GPU/CPU <--> numpy/torch, need to change the implementation of forward
+            with self.track():
+                self.model.forward(**inputs)
+
+        self.finalize(benchmark_duration_ns)
+
+        return self.to_dict()
 
 
 task_processing_map = {

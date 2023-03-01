@@ -65,7 +65,7 @@ class ORTModel:
             dataset (`datasets.Dataset`):
                 Dataset to use for the evaluation step.
         """
-        logger.info(f"***** Running evaluation *****")
+        logger.info("***** Running evaluation *****")
         all_preds = None
         all_labels = None
         for step, inputs in enumerate(dataset):

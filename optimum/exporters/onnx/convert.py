@@ -119,7 +119,7 @@ def validate_models_outputs(
         onnx_model_path = (
             output_dir.joinpath(output_names[i])
             if output_names is not None
-            else output_dir.joinpath(model_name + ".onnx")
+            else output_dir.joinpath(f"{model_name}.onnx")
         )
         validate_model_outputs(
             sub_onnx_config,
@@ -180,7 +180,7 @@ def validate_model_outputs(
             name = "present"
         if isinstance(value, (list, tuple)):
             value = config.flatten_output_collection_property(name, value)
-            ref_outputs_dict.update(value)
+            ref_outputs_dict |= value
         else:
             ref_outputs_dict[name] = value
 
@@ -192,7 +192,10 @@ def validate_model_outputs(
     for name, value in reference_model_inputs_for_validation.items():
         if isinstance(value, (list, tuple)):
             value = config.flatten_output_collection_property(name, value)
-            onnx_inputs.update({tensor_name: pt_tensor.numpy() for tensor_name, pt_tensor in value.items()})
+            onnx_inputs |= {
+                tensor_name: pt_tensor.numpy()
+                for tensor_name, pt_tensor in value.items()
+            }
         else:
             onnx_inputs[name] = value.numpy()
 
@@ -208,9 +211,8 @@ def validate_model_outputs(
             f"ONNX model output names: {onnx_outputs_set}"
             f"Difference: {onnx_outputs_set.difference(ref_outputs_set)}"
         )
-    else:
-        onnx_output_names = ", ".join(onnx_outputs_set)
-        logger.info(f"\t-[✓] ONNX model output names match reference model ({onnx_output_names})")
+    onnx_output_names = ", ".join(onnx_outputs_set)
+    logger.info(f"\t-[✓] ONNX model output names match reference model ({onnx_output_names})")
 
     # Check the shape and values match
     shape_failures = []
@@ -223,7 +225,7 @@ def validate_model_outputs(
         logger.info(f'\t- Validating ONNX Model output "{name}":')
 
         # Shape
-        if not ort_value.shape == ref_value.shape:
+        if ort_value.shape != ref_value.shape:
             logger.error(f"\t\t-[x] shape {ort_value.shape} doesn't match {ref_value.shape}")
             shape_failures.append((name, ref_value.shape, ort_value.shape))
         else:
@@ -318,7 +320,9 @@ def export_pytorch(
                 f=output.as_posix(),
                 input_names=input_names,
                 output_names=output_names,
-                dynamic_axes={name: axes for name, axes in chain(inputs.items(), config.outputs.items())},
+                dynamic_axes=dict(
+                    chain(inputs.items(), config.outputs.items())
+                ),
                 do_constant_folding=True,
                 opset_version=opset,
             )
@@ -446,7 +450,7 @@ def export_models(
         output_path = (
             output_dir.joinpath(output_names[i])
             if output_names is not None
-            else output_dir.joinpath(model_name + ".onnx")
+            else output_dir.joinpath(f"{model_name}.onnx")
         )
         outputs.append(
             export(
@@ -458,8 +462,7 @@ def export_models(
             )
         )
 
-    outputs = list(map(list, zip(*outputs)))
-    return outputs
+    return list(map(list, zip(*outputs)))
 
 
 def export(

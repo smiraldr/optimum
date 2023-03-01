@@ -272,6 +272,8 @@ class ORTDecoder:
         if past_key_values is not None:
             past_key_values = [past_key_value for pkv_per_layer in past_key_values for past_key_value in pkv_per_layer]
 
+        # Tuple of tuple of length `n_layers`, with each tuple of length equal to 2 (self-attention key and value per decoder layer)
+        num_pkv = 2
         if self._device.type == "cuda" and self.use_io_binding:
             io_binding, output_shapes, output_buffers = self.prepare_io_binding(
                 input_ids, attention_mask, past_key_values
@@ -286,10 +288,6 @@ class ORTDecoder:
             past_key_values = tuple()
             for name in self.key_value_output_names:
                 past_key_values += (output_buffers[name].view(output_shapes[name]),)
-
-            # Tuple of tuple of length `n_layers`, with each tuple of length equal to 2 (self-attention key and value per decoder layer)
-            num_pkv = 2
-            past_key_values = tuple(past_key_values[i : i + num_pkv] for i in range(0, len(past_key_values), num_pkv))
 
             logits = output_buffers["logits"].view(output_shapes["logits"])
         else:
@@ -312,11 +310,9 @@ class ORTDecoder:
                 for key in self.key_value_output_names
             )
 
-            # Tuple of tuple of length `n_layers`, with each tuple of length equal to the number of self-attention and
-            # per decoder layer
-            num_pkv = 2
-            past_key_values = tuple(past_key_values[i : i + num_pkv] for i in range(0, len(past_key_values), num_pkv))
             logits = torch.from_numpy(outputs[self.session_outputs["logits"]]).to(self._device)
+
+        past_key_values = tuple(past_key_values[i : i + num_pkv] for i in range(0, len(past_key_values), num_pkv))
 
         return CausalLMOutputWithCrossAttentions(logits=logits, past_key_values=past_key_values)
 
@@ -522,7 +518,7 @@ class ORTModelDecoder(ORTModel):
             )
 
         decoder_with_past_path = None
-        if use_cache is True:
+        if use_cache:
             if not validate_file_exists(model_id, decoder_with_past_file_name, subfolder=subfolder, revision=revision):
                 decoder_with_past_file_name = ORTModelDecoder.infer_onnx_filename(
                     model_id,
@@ -580,7 +576,7 @@ class ORTModelDecoder(ORTModel):
             new_model_save_dir = Path(model_cache_path).parent
             preprocessors = maybe_load_preprocessors(model_id, subfolder=subfolder)
 
-            last_decoder_with_past_name = paths.get("last_decoder_with_past_model_name", None)
+            last_decoder_with_past_name = paths.get("last_decoder_with_past_model_name")
             if last_decoder_with_past_name is not None:
                 last_decoder_with_past_name = new_model_save_dir / last_decoder_with_past_name
 
@@ -649,7 +645,7 @@ class ORTModelDecoder(ORTModel):
         onnx_config = onnx_config_constructor(model.config, use_past=use_cache)
 
         output_names = [ONNX_DECODER_NAME]
-        if use_cache is True:
+        if use_cache:
             output_names.append(ONNX_DECODER_WITH_PAST_NAME)
         export_models(
             model=model,
@@ -739,8 +735,8 @@ class ORTModelForCausalLM(ORTModelDecoder, GenerationMixin):
     def prepare_inputs_for_generation(self, input_ids, past=None, **kwargs):
         # if model is used as a decoder in encoder-decoder model, the decoder attention mask is created on the fly
 
-        attention_mask = kwargs.get("attention_mask", None)  # input_ids.new_ones(input_ids.shape)
-        use_cache = kwargs.get("use_cache", None)
+        attention_mask = kwargs.get("attention_mask")
+        use_cache = kwargs.get("use_cache")
 
         return {
             "input_ids": input_ids,
