@@ -82,14 +82,10 @@ class TextSeq2SeqOnnxConfig(OnnxSeq2SeqConfigWithPast):
         if self.use_past_in_inputs:
             common_inputs["attention_mask"][1] = "past_encoder_sequence_length + sequence_length"
             common_inputs["decoder_input_ids"] = {0: "batch_size"}
-            # common_inputs["decoder_attention_mask"] = {0: "batch", 1: "past_decoder_sequence + sequence"}
-        else:
-            common_inputs["decoder_input_ids"] = {0: "batch_size", 1: "decoder_sequence_length"}
-            # common_inputs["decoder_attention_mask"] = {0: "batch", 1: "decoder_sequence"}
-
-        if self.use_past_in_inputs:
             self.add_past_key_values(common_inputs, direction="inputs")
 
+        else:
+            common_inputs["decoder_input_ids"] = {0: "batch_size", 1: "decoder_sequence_length"}
         return common_inputs
 
     def _create_dummy_input_generator_classes(self, **kwargs) -> List["DummyInputGenerator"]:
@@ -109,13 +105,11 @@ class TextSeq2SeqOnnxConfig(OnnxSeq2SeqConfigWithPast):
             encoder_sequence_length=dummy_text_input_generator.sequence_length,
             **kwargs,
         )
-        dummy_inputs_generators = [
+        return [
             dummy_text_input_generator,
             dummy_decoder_text_input_generator,
             dummy_seq2seq_past_key_values_generator,
         ]
-
-        return dummy_inputs_generators
 
 
 class VisionOnnxConfig(OnnxConfig):

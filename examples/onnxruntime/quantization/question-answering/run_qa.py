@@ -186,16 +186,15 @@ class DataTrainingArguments:
             and self.test_file is None
         ):
             raise ValueError("Need either a dataset name or a training/validation file/test_file.")
-        else:
-            if self.train_file is not None:
-                extension = self.train_file.split(".")[-1]
-                assert extension in ["csv", "json"], "`train_file` should be a csv or a json file."
-            if self.validation_file is not None:
-                extension = self.validation_file.split(".")[-1]
-                assert extension in ["csv", "json"], "`validation_file` should be a csv or a json file."
-            if self.test_file is not None:
-                extension = self.test_file.split(".")[-1]
-                assert extension in ["csv", "json"], "`test_file` should be a csv or a json file."
+        if self.train_file is not None:
+            extension = self.train_file.split(".")[-1]
+            assert extension in ["csv", "json"], "`train_file` should be a csv or a json file."
+        if self.validation_file is not None:
+            extension = self.validation_file.split(".")[-1]
+            assert extension in ["csv", "json"], "`validation_file` should be a csv or a json file."
+        if self.test_file is not None:
+            extension = self.test_file.split(".")[-1]
+            assert extension in ["csv", "json"], "`test_file` should be a csv or a json file."
 
 
 @dataclass
@@ -426,7 +425,10 @@ def main():
                     token_end_index -= 1
 
                 # Detect if the answer is out of the span (in which case this feature is labeled with the CLS index).
-                if not (offsets[token_start_index][0] <= start_char and offsets[token_end_index][1] >= end_char):
+                if (
+                    offsets[token_start_index][0] > start_char
+                    or offsets[token_end_index][1] < end_char
+                ):
                     tokenized_examples["start_positions"].append(cls_index)
                     tokenized_examples["end_positions"].append(cls_index)
                 else:
@@ -676,7 +678,7 @@ def main():
         metrics = compute_metrics(predictions)
 
         # Save metrics
-        with open(os.path.join(training_args.output_dir, f"eval_results.json"), "w") as f:
+        with open(os.path.join(training_args.output_dir, "eval_results.json"), "w") as f:
             json.dump(metrics, f, indent=4, sort_keys=True)
 
     # Prediction
@@ -693,7 +695,7 @@ def main():
         metrics = compute_metrics(predictions)
 
         # Save metrics
-        with open(os.path.join(training_args.output_dir, f"predict_results.json"), "w") as f:
+        with open(os.path.join(training_args.output_dir, "predict_results.json"), "w") as f:
             json.dump(metrics, f, indent=4, sort_keys=True)
 
 

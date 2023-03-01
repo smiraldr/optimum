@@ -49,18 +49,18 @@ def replace_to_bettertransformer(model, config):
     """
 
     for name, module in model.named_children():
-        if len(list(module.children())) > 0:
-            # we may explicitly exclude part of the model to use BetterTransformer
-            if config.model_type not in BetterTransformerManager.EXCLUDE_FROM_TRANSFORM or (
-                config.model_type in BetterTransformerManager.EXCLUDE_FROM_TRANSFORM
-                and name not in BetterTransformerManager.EXCLUDE_FROM_TRANSFORM[config.model_type]
-            ):
-                replace_to_bettertransformer(module, config)
+        if list(module.children()) and (
+            config.model_type
+            not in BetterTransformerManager.EXCLUDE_FROM_TRANSFORM
+            or name
+            not in BetterTransformerManager.EXCLUDE_FROM_TRANSFORM[
+                config.model_type
+            ]
+        ):
+            replace_to_bettertransformer(module, config)
 
-        if hasattr(module, "is_decoder"):
-            # Decoders are not supported yet on Better Transformers
-            if module.is_decoder:
-                continue
+        if hasattr(module, "is_decoder") and module.is_decoder:
+            continue
 
         if hasattr(module, "SCB"):
             # 8-bit modules are not supported
@@ -95,7 +95,7 @@ def set_last_layer(model: torch.nn.Module):
 
     modulelist_lengths = []
 
-    for key in dict_named_module.keys():
+    for key in dict_named_module:
         if (
             isinstance(dict_named_module[key], torch.nn.ModuleList)
             and "encoder" in key
@@ -123,7 +123,7 @@ def set_last_layer(model: torch.nn.Module):
                 setattr(module, "is_last_layer", True)
                 return
     else:
-        for key in dict_named_module.keys():
+        for key in dict_named_module:
             if isinstance(dict_named_module[key], torch.nn.ModuleList) and all(
                 "LayerBetterTransformer" in module_name for module_name in sort_fn(dict_named_module[key])
             ):
@@ -170,11 +170,7 @@ class BetterTransformer(object):
         """
 
         # Check if we have to load the model using `accelerate`
-        if hasattr(model, "hf_device_map"):
-            load_accelerate = True
-        else:
-            load_accelerate = False
-
+        load_accelerate = bool(hasattr(model, "hf_device_map"))
         if BetterTransformerManager.cannot_support(model.config.model_type):
             raise ValueError(
                 f"The model type {model.config.model_type} can not be supported to be used with BetterTransformer. The identified reason is:"

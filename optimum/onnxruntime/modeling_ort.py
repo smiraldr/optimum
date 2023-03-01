@@ -377,10 +377,10 @@ class ORTModel(OptimizedModel):
                 else:
                     token = use_auth_token
                 repo_files = map(Path, HfApi().list_repo_files(model_id, revision=revision, token=token))
-                pattern = "*.onnx" if subfolder == "" else f"{subfolder}/*.onnx"
+                pattern = f"{subfolder}/*.onnx" if subfolder else "*.onnx"
                 onnx_files = [p for p in repo_files if p.match(pattern)]
 
-            if len(onnx_files) == 0:
+            if not onnx_files:
                 raise FileNotFoundError(f"Could not find any ONNX model file in {model_path}")
             elif len(onnx_files) > 1:
                 raise RuntimeError(
@@ -1619,12 +1619,12 @@ class ORTModelForSemanticSegmentation(ORTModel):
             self.model.run_with_iobinding(io_binding)
             io_binding.synchronize_outputs()
 
-            outputs = {}
-            for name, output in zip(self.model_output_names, io_binding._iobinding.get_outputs()):
-                outputs[name] = IOBindingHelper.to_pytorch(output)
-
-            # converts output to namedtuple for pipelines post-processing
-            return SemanticSegmenterOutput(logits=outputs["logits"])
+            outputs = {
+                name: IOBindingHelper.to_pytorch(output)
+                for name, output in zip(
+                    self.model_output_names, io_binding._iobinding.get_outputs()
+                )
+            }
         else:
             # converts pytorch inputs into numpy inputs for onnx
             onnx_inputs = self._prepare_onnx_inputs(**kwargs)
@@ -1633,26 +1633,23 @@ class ORTModelForSemanticSegmentation(ORTModel):
             onnx_outputs = self.model.run(None, onnx_inputs)
             outputs = self._prepare_onnx_outputs(onnx_outputs)
 
-            # converts output to namedtuple for pipelines post-processing
-            return SemanticSegmenterOutput(logits=outputs["logits"])
+
+        # converts output to namedtuple for pipelines post-processing
+        return SemanticSegmenterOutput(logits=outputs["logits"])
 
     def _prepare_onnx_inputs(self, **kwargs):
         model_inputs = {input_key.name: idx for idx, input_key in enumerate(self.model.get_inputs())}
-        onnx_inputs = {}
-        # converts pytorch inputs into numpy inputs for onnx
-        for input in model_inputs.keys():
-            onnx_inputs[input] = kwargs.pop(input).cpu().detach().numpy()
-
-        return onnx_inputs
+        return {
+            input: kwargs.pop(input).cpu().detach().numpy()
+            for input in model_inputs
+        }
 
     def _prepare_onnx_outputs(self, onnx_outputs):
         model_outputs = {output_key.name: idx for idx, output_key in enumerate(self.model.get_outputs())}
-        outputs = {}
-        # converts onnxruntime outputs into tensor for standard outputs
-        for output, idx in model_outputs.items():
-            outputs[output] = torch.from_numpy(onnx_outputs[idx]).to(self.device)
-
-        return outputs
+        return {
+            output: torch.from_numpy(onnx_outputs[idx]).to(self.device)
+            for output, idx in model_outputs.items()
+        }
 
 
 CUSTOM_TASKS_EXAMPLE = r"""
@@ -1722,10 +1719,12 @@ class ORTModelForCustomTasks(ORTModel):
             self.model.run_with_iobinding(io_binding)
             io_binding.synchronize_outputs()
 
-            outputs = {}
-            for name, output in zip(self.model_output_names, io_binding._iobinding.get_outputs()):
-                outputs[name] = IOBindingHelper.to_pytorch(output)
-
+            outputs = {
+                name: IOBindingHelper.to_pytorch(output)
+                for name, output in zip(
+                    self.model_output_names, io_binding._iobinding.get_outputs()
+                )
+            }
             # converts output to namedtuple for pipelines post-processing
             return ModelOutput(**outputs)
         else:
@@ -1741,18 +1740,14 @@ class ORTModelForCustomTasks(ORTModel):
 
     def _prepare_onnx_inputs(self, **kwargs):
         model_inputs = {input_key.name: idx for idx, input_key in enumerate(self.model.get_inputs())}
-        onnx_inputs = {}
-        # converts pytorch inputs into numpy inputs for onnx
-        for input in model_inputs.keys():
-            onnx_inputs[input] = kwargs.pop(input).cpu().detach().numpy()
-
-        return onnx_inputs
+        return {
+            input: kwargs.pop(input).cpu().detach().numpy()
+            for input in model_inputs
+        }
 
     def _prepare_onnx_outputs(self, onnx_outputs):
         model_outputs = {output_key.name: idx for idx, output_key in enumerate(self.model.get_outputs())}
-        outputs = {}
-        # converts onnxruntime outputs into tensor for standard outputs
-        for output, idx in model_outputs.items():
-            outputs[output] = torch.from_numpy(onnx_outputs[idx]).to(self.device)
-
-        return outputs
+        return {
+            output: torch.from_numpy(onnx_outputs[idx]).to(self.device)
+            for output, idx in model_outputs.items()
+        }

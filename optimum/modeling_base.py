@@ -170,9 +170,7 @@ class OptimizedModel(ABC):
                         path_or_fileobj=os.path.join(os.getcwd(), local_file_path),
                         path_in_repo=hub_file_path,
                     )
-                except KeyError:
-                    pass
-                except NameError:
+                except (KeyError, NameError):
                     pass
 
     def git_config_username_and_email(self, git_user: str = None, git_email: str = None):

@@ -49,11 +49,11 @@ def _replace_input_names(model: ModelProto, name_sharing_dict: Dict[str, str]):
 
 
 def _remove_redundant_initializers(model: ModelProto, name_sharing_dict: Dict[str, str]):
-    to_pop = []
-    for idx, initializer in enumerate(model.graph.initializer):
-        if initializer.name != name_sharing_dict[initializer.name]:
-            to_pop.append(idx)
-
+    to_pop = [
+        idx
+        for idx, initializer in enumerate(model.graph.initializer)
+        if initializer.name != name_sharing_dict[initializer.name]
+    ]
     for idx in sorted(to_pop, reverse=True):
         model.graph.initializer.pop(idx)
 

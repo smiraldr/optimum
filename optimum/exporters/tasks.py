@@ -672,8 +672,6 @@ class TasksManager:
         if framework is not None:
             return framework
 
-        framework_map = {"pt": "PyTorch", "tf": "TensorFlow"}
-
         full_model_path = Path(model_name_or_path) / subfolder
         if full_model_path.is_dir():
             if (full_model_path / WEIGHTS_NAME).is_file():
@@ -686,6 +684,8 @@ class TasksManager:
                     f" There should be a {WEIGHTS_NAME} for PyTorch"
                     f" or {TF2_WEIGHTS_NAME} for TensorFlow."
                 )
+            framework_map = {"pt": "PyTorch", "tf": "TensorFlow"}
+
             logger.info(f"Local {framework_map[framework]} model found.")
         else:
             if not isinstance(model_name_or_path, str):
@@ -742,28 +742,28 @@ class TasksManager:
             tasks_to_automodels = TasksManager._TASKS_TO_TF_AUTOMODELS
             class_name_prefix = "TF"
 
-        inferred_task_name = None
-        is_local = os.path.isdir(os.path.join(model_name_or_path, subfolder))
-
-        if is_local:
+        if is_local := os.path.isdir(os.path.join(model_name_or_path, subfolder)):
             # TODO: maybe implement that.
             raise RuntimeError("Cannot infer the task from a local directory yet, please specify the task manually.")
-        else:
-            if subfolder != "":
-                raise RuntimeError(
-                    "Cannot infer the task from a model repo with a subfolder yet, please specify the task manually."
-                )
-            model_info = huggingface_hub.model_info(model_name_or_path, revision=revision)
-            transformers_info = model_info.transformersInfo
-            if transformers_info is None or transformers_info.get("auto_model") is None:
-                raise RuntimeError(f"Could not infer the task from the model repo {model_name_or_path}")
-            auto_model_class_name = transformers_info["auto_model"]
-            if not auto_model_class_name.startswith("TF"):
-                auto_model_class_name = f"{class_name_prefix}{auto_model_class_name}"
-            for task_name, class_ in tasks_to_automodels.items():
-                if class_.__name__ == auto_model_class_name:
-                    inferred_task_name = task_name
-                    break
+        if subfolder != "":
+            raise RuntimeError(
+                "Cannot infer the task from a model repo with a subfolder yet, please specify the task manually."
+            )
+        model_info = huggingface_hub.model_info(model_name_or_path, revision=revision)
+        transformers_info = model_info.transformersInfo
+        if transformers_info is None or transformers_info.get("auto_model") is None:
+            raise RuntimeError(f"Could not infer the task from the model repo {model_name_or_path}")
+        auto_model_class_name = transformers_info["auto_model"]
+        if not auto_model_class_name.startswith("TF"):
+            auto_model_class_name = f"{class_name_prefix}{auto_model_class_name}"
+        inferred_task_name = next(
+            (
+                task_name
+                for task_name, class_ in tasks_to_automodels.items()
+                if class_.__name__ == auto_model_class_name
+            ),
+            None,
+        )
         if inferred_task_name is None:
             raise KeyError(f"Could not find the proper task name for {auto_model_class_name}.")
         logger.info(f"Automatic task detection to {inferred_task_name}.")
@@ -778,11 +778,11 @@ class TasksManager:
             `List`: all the possible tasks.
         """
         tasks = []
-        if is_torch_available():
-            tasks = list(TasksManager._TASKS_TO_AUTOMODELS.keys())
-        else:
-            tasks = list(TasksManager._TASKS_TO_TF_AUTOMODELS)
-        return tasks
+        return (
+            list(TasksManager._TASKS_TO_AUTOMODELS.keys())
+            if is_torch_available()
+            else list(TasksManager._TASKS_TO_TF_AUTOMODELS)
+        )
 
     @staticmethod
     def get_model_from_task(
@@ -831,11 +831,10 @@ class TasksManager:
             if framework == "pt":
                 logger.info("Loading TensorFlow model in PyTorch before exporting.")
                 kwargs["from_tf"] = True
-                model = model_class.from_pretrained(model_name_or_path, **kwargs)
             else:
                 logger.info("Loading PyTorch model in TensorFlow before exporting.")
                 kwargs["from_pt"] = True
-                model = model_class.from_pretrained(model_name_or_path, **kwargs)
+            model = model_class.from_pretrained(model_name_or_path, **kwargs)
         return model
 
     @staticmethod

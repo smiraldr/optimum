@@ -109,9 +109,7 @@ def main():
         and task in ["sequence_classification"]
     )
     if needs_pad_token_id:
-        if args.pad_token_id is not None:
-            model.config.pad_token_id = args.pad_token_id
-        else:
+        if args.pad_token_id is None:
             try:
                 tok = AutoTokenizer.from_pretrained(args.model)
                 model.config.pad_token_id = tok.pad_token_id
@@ -120,6 +118,8 @@ def main():
                     "Could not infer the pad token id, which is needed in this case, please provide it with the --pad_token_id argument"
                 )
 
+        else:
+            model.config.pad_token_id = args.pad_token_id
     # Ensure the requested opset is sufficient
     if args.opset is None:
         args.opset = onnx_config.DEFAULT_ONNX_OPSET

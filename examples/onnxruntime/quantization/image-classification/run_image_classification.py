@@ -418,7 +418,7 @@ def main():
         )
         outputs = ort_model.evaluation_loop(eval_dataset)
         # Save metrics
-        with open(os.path.join(training_args.output_dir, f"eval_results.json"), "w") as f:
+        with open(os.path.join(training_args.output_dir, "eval_results.json"), "w") as f:
             json.dump(outputs.metrics, f, indent=4, sort_keys=True)
 
 

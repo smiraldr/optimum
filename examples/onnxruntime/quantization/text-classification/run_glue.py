@@ -322,7 +322,7 @@ def main():
             else:
                 raise ValueError("Need either a GLUE task or a test file for `do_predict`.")
 
-        for key in data_files.keys():
+        for key in data_files:
             logger.info(f"load a local file for {key}: {data_files[key]}")
 
         if data_args.train_file.endswith(".csv"):
@@ -514,7 +514,7 @@ def main():
         )
         outputs = ort_model.evaluation_loop(eval_dataset)
         # Save metrics
-        with open(os.path.join(training_args.output_dir, f"eval_results.json"), "w") as f:
+        with open(os.path.join(training_args.output_dir, "eval_results.json"), "w") as f:
             json.dump(outputs.metrics, f, indent=4, sort_keys=True)
 
     # Prediction
@@ -536,7 +536,9 @@ def main():
         predictions = np.squeeze(outputs.predictions) if is_regression else np.argmax(outputs.predictions, axis=1)
 
         # Save predictions
-        output_predictions_file = os.path.join(training_args.output_dir, f"prediction.txt")
+        output_predictions_file = os.path.join(
+            training_args.output_dir, "prediction.txt"
+        )
         with open(output_predictions_file, "w") as writer:
             logger.info(f"***** Predict results {data_args.task_name} *****")
             writer.write("index\tprediction\n")

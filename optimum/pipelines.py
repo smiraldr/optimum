@@ -268,11 +268,12 @@ def pipeline(
 ) -> Pipeline:
     targeted_task = "translation" if task.startswith("translation") else task
 
-    if accelerator == "ort":
-        if targeted_task not in list(SUPPORTED_TASKS.keys()):
-            raise ValueError(
-                f"Task {targeted_task} is not supported. Supported tasks are { list(SUPPORTED_TASKS.keys())}"
-            )
+    if accelerator == "ort" and targeted_task not in list(
+        SUPPORTED_TASKS.keys()
+    ):
+        raise ValueError(
+            f"Task {targeted_task} is not supported. Supported tasks are { list(SUPPORTED_TASKS.keys())}"
+        )
 
     if accelerator not in MAPPING_LOADING_FUNC:
         raise ValueError(
@@ -280,19 +281,8 @@ def pipeline(
         )
 
     # copied from transformers.pipelines.__init__.py l.609
-    if targeted_task in NO_TOKENIZER_TASKS:
-        # These will never require a tokenizer.
-        # the model on the other hand might have a tokenizer, but
-        # the files could be missing from the hub, instead of failing
-        # on such repos, we just force to not load it.
-        load_tokenizer = False
-    else:
-        load_tokenizer = True
-    if targeted_task in NO_FEATURE_EXTRACTOR_TASKS:
-        load_feature_extractor = False
-    else:
-        load_feature_extractor = True
-
+    load_tokenizer = targeted_task not in NO_TOKENIZER_TASKS
+    load_feature_extractor = targeted_task not in NO_FEATURE_EXTRACTOR_TASKS
     model, model_id, tokenizer, feature_extractor = MAPPING_LOADING_FUNC[accelerator](
         model,
         targeted_task,
